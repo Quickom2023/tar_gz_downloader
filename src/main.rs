@@ -32,8 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting download and extraction...");
 
-    // Step 6: Wrap the response in a BufReader, then in a GzDecoder and pass it to tar::Archive for streaming extraction
-    let progress_reader = ProgressReader::new(BufReader::new(response), total_size);
+    // Step 6: Wrap the response in a BufReader with a larger buffer, then in a GzDecoder and pass it to tar::Archive for streaming extraction
+    let progress_reader = ProgressReader::new(BufReader::with_capacity(8 * 1024 * 1024, response), total_size); // 8 MB buffer
     let tar_gz = GzDecoder::new(progress_reader);
     let mut archive = Archive::new(tar_gz);
 
