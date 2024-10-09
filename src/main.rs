@@ -5,6 +5,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use tar::Archive;
+use xz2::read::XzDecoder;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -21,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(&extract_dir)?;
     }
 
-    // Step 4: Stream the tar.gz file directly from the URL
+    // Step 4: Stream the tar.gz or tar.xz file directly from the URL
     let client = Client::new();
     let response = client.get(url).send()?;
 
@@ -32,15 +33,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting download and extraction...");
 
-    // Step 6: Wrap the response in a BufReader with a larger buffer, then in a GzDecoder and pass it to tar::Archive for streaming extraction
+    // Step 6: Extract the archive based on the file type
     let progress_reader = ProgressReader::new(BufReader::with_capacity(8 * 1024 * 1024, response), total_size); // 8 MB buffer
-    let tar_gz = GzDecoder::new(progress_reader);
-    let mut archive = Archive::new(tar_gz);
-
-    // Step 7: Extract the archive to the specified directory
-    archive.unpack(extract_dir)?;
+    extract_archive(url, progress_reader, extract_dir)?;
 
     println!("\nExtraction complete.");
+    Ok(())
+}
+
+fn extract_archive<R: BufRead>(url: &str, progress_reader: ProgressReader<R>, extract_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let url_lower = url.to_lowercase();
+    if url_lower.ends_with(".tar.gz") {
+        let tar_gz = GzDecoder::new(progress_reader);
+        let mut archive = Archive::new(tar_gz);
+        archive.unpack(extract_dir)?;
+    } else if url_lower.ends_with(".tar.xz") {
+        let tar_xz = XzDecoder::new(progress_reader);
+        let mut archive = Archive::new(tar_xz);
+        archive.unpack(extract_dir)?;
+    } else {
+        return Err("Unsupported file type. Only .tar.gz and .tar.xz are supported.".into());
+    }
     Ok(())
 }
 
